@@ -52,6 +52,10 @@ setup(
     extras_require={
         "xformers": [
             "xformers @ git+https://github.com/facebookresearch/xformers.git@main#egg=xformers",
+        ],
+        "real": 
+        [
+            "robits[real,audio]>=0.5.0"
         ]
     },
 )
