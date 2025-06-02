@@ -58,4 +58,10 @@ setup(
             "robits[real,audio]>=0.5.0"
         ]
     },
+
+    entry_points={
+        'console_scripts': [
+            'sam2act-agent = sam2act.real.sam2act_cli:cli',
+        ]
+    }
 )
