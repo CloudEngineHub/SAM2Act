@@ -22,7 +22,7 @@ requirements = [
     "pyquaternion",
     "matplotlib",
     "bitsandbytes==0.38.1",
-    "triton==2.3.1",
+    #"triton==2.3.1",
     "transforms3d",
     "clip @ git+https://github.com/openai/CLIP.git",
     "wandb",
@@ -55,7 +55,7 @@ setup(
         ],
         "real": 
         [
-            "robits[real,audio]>=0.5.0"
+            "robits[real,audio]>=0.5.1"
         ]
     },
 
