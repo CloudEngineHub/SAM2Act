@@ -183,7 +183,7 @@ class CustomRLBenchEnv(RLBenchEnv):
 
         self._task.set_variation(-1)
         d, = self._task.get_demos(
-            1, live_demos=False, random_selection=False, from_episode_number=i)
+            1, live_demos=False, random_selection=False, from_episode_number=i, image_paths=True,)
 
         self._task.set_variation(d.variation_number)
         _, obs = self._task.reset_to_demo(d)
@@ -376,7 +376,7 @@ class CustomMultiTaskRLBenchEnv(MultiTaskRLBenchEnv):
 
         self._task.set_variation(-1)
         d = self._task.get_demos(
-            1, live_demos=False, random_selection=False, from_episode_number=i)[0]
+            1, live_demos=False, random_selection=False, from_episode_number=i, image_paths=True,)[0]
 
         self._task.set_variation(d.variation_number)
         _, obs = self._task.reset_to_demo(d)

@@ -27,7 +27,7 @@ class CustomMultiTaskRLBenchEnv2(CustomMultiTaskRLBenchEnv):
         self._i = 0
         self._task.set_variation(-1)
         d = self._task.get_demos(
-            1, live_demos=False, random_selection=False, from_episode_number=i
+            1, live_demos=False, random_selection=False, from_episode_number=i, image_paths=True,
         )[0]
 
         self._task.set_variation(d.variation_number)
