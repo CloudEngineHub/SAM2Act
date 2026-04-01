@@ -8,8 +8,16 @@ import csv
 import torch
 import cv2
 import shutil
+import tempfile
+import subprocess
+import re
 
 import numpy as np
+
+try:
+    import imageio_ffmpeg
+except ImportError:
+    imageio_ffmpeg = None
 
 from omegaconf import OmegaConf
 from multiprocessing import Value
@@ -74,6 +82,129 @@ def get_model_size(model):
     
     print(f'{model.__class__.__name__}\'s parameter num: {param_num/1000/1000}M')
     print(f'{model.__class__.__name__}\'s trainable parameter num: {trainable_para_num/1000/1000}M')
+
+
+def _save_mp4_video(video_path, frames_bgr, fps):
+    if len(frames_bgr) == 0:
+        raise RuntimeError(f"No frames to save for video: {video_path}")
+
+    ffmpeg_path = _get_ffmpeg_path()
+    if ffmpeg_path is not None:
+        while True:
+            encoder = _get_ffmpeg_video_encoder(ffmpeg_path)
+            if encoder is None:
+                print(
+                    "[Video] No supported ffmpeg MP4 encoder found; "
+                    "using OpenCV mp4v writer."
+                )
+                break
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    for idx, frame in enumerate(frames_bgr):
+                        frame_path = os.path.join(tmpdir, f"{idx:06d}.png")
+                        if not cv2.imwrite(frame_path, frame):
+                            raise RuntimeError(f"Failed to write frame: {frame_path}")
+                    image_sequence = os.path.join(tmpdir, "%06d.png")
+                    subprocess.run(
+                        [
+                            ffmpeg_path,
+                            "-y",
+                            "-framerate",
+                            str(fps),
+                            "-start_number",
+                            "0",
+                            "-i",
+                            image_sequence,
+                            "-c:v",
+                            encoder,
+                            "-pix_fmt",
+                            "yuv420p",
+                            "-movflags",
+                            "+faststart",
+                            video_path,
+                        ],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                return
+            except subprocess.CalledProcessError as exc:
+                _FFMPEG_BROKEN_ENCODERS.setdefault(ffmpeg_path, set()).add(encoder)
+                print(
+                    f"[Video] ffmpeg encode with encoder={encoder} failed for "
+                    f"{video_path}; trying another encoder or falling back to "
+                    "OpenCV mp4v writer."
+                )
+                if exc.stderr:
+                    print(exc.stderr)
+                continue
+
+    height, width = frames_bgr[0].shape[:2]
+    writer = cv2.VideoWriter(
+        video_path,
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        fps,
+        (width, height),
+    )
+    if not writer.isOpened():
+        raise RuntimeError(f"Could not open video writer for: {video_path}")
+    for frame in frames_bgr:
+        writer.write(frame)
+    writer.release()
+
+
+_FFMPEG_ENCODER_CACHE = {}
+_FFMPEG_BROKEN_ENCODERS = {}
+
+
+def _get_ffmpeg_path():
+    if imageio_ffmpeg is not None:
+        try:
+            ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+            if ffmpeg_path and os.path.exists(ffmpeg_path):
+                return ffmpeg_path
+        except Exception:
+            pass
+
+    return shutil.which("ffmpeg")
+
+
+def _get_ffmpeg_video_encoder(ffmpeg_path):
+    broken_encoders = _FFMPEG_BROKEN_ENCODERS.get(ffmpeg_path, set())
+    cache_key = (ffmpeg_path, tuple(sorted(broken_encoders)))
+    if cache_key in _FFMPEG_ENCODER_CACHE:
+        return _FFMPEG_ENCODER_CACHE[cache_key]
+
+    encoder = None
+    try:
+        result = subprocess.run(
+            [ffmpeg_path, "-hide_banner", "-encoders"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        encoders_output = result.stdout
+        for candidate in (
+            "libx264",
+            "libopenh264",
+            "mpeg4",
+        ):
+            if candidate in broken_encoders:
+                continue
+            if re.search(
+                rf"^\s*\S+\s+{re.escape(candidate)}\s",
+                encoders_output,
+                re.MULTILINE,
+            ):
+                encoder = candidate
+                break
+    except Exception as exc:
+        print(f"[Video] Failed to query ffmpeg encoders: {exc}")
+
+    _FFMPEG_ENCODER_CACHE[cache_key] = encoder
+    return encoder
 
 
 def load_agent(
@@ -385,7 +516,6 @@ def eval(
         scores.append(task_score)
 
         if save_video:
-            video_image_folder = "./tmp"
             record_fps = 25
             record_folder = os.path.join(log_dir, "videos")
             os.makedirs(record_folder, exist_ok=True)
@@ -397,6 +527,7 @@ def eval(
                     video = deepcopy(summary.value)
                     video = np.transpose(video, (0, 2, 3, 1))
                     video = video[:, :, :, ::-1]
+                    video_frames = video[:-10] if len(video) > 10 else video
                     if task_rewards[video_cnt] > 99:
                         video_path = os.path.join(
                             record_folder,
@@ -409,24 +540,7 @@ def eval(
                         )
                         video_fail_cnt += 1
                     video_cnt += 1
-                    os.makedirs(video_image_folder, exist_ok=True)
-                    for idx in range(len(video) - 10):
-                        cv2.imwrite(
-                            os.path.join(video_image_folder, f"{idx}.png"), video[idx]
-                        )
-                    images_path = os.path.join(video_image_folder, r"%d.png")
-                    os.system(
-                        "ffmpeg -i {} -vf palettegen palette.png -hide_banner -loglevel error".format(
-                            images_path
-                        )
-                    )
-                    os.system(
-                        "ffmpeg -framerate {} -i {} -i palette.png -lavfi paletteuse {} -hide_banner -loglevel error".format(
-                            record_fps, images_path, video_path
-                        )
-                    )
-                    os.remove("palette.png")
-                    shutil.rmtree(video_image_folder)
+                    _save_mp4_video(video_path, video_frames, record_fps)
 
     # also add average scores at the end
     if logging:

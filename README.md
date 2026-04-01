@@ -298,7 +298,13 @@ pip install opencv-python-headless
 
 - If you are having issues running evaluation on a headless server, please refer to https://github.com/NVlabs/RVT/issues/2#issuecomment-1620704943.
 
-- If you want to generate visualization videos, please refer to https://github.com/NVlabs/RVT/issues/5.
+- If you want to generate visualization videos with `--save-video`, we recommend installing `imageio-ffmpeg`:
+
+```
+pip install --upgrade imageio-ffmpeg
+```
+
+  The video saver will first try the bundled ffmpeg binary from `imageio-ffmpeg`, then fall back to a system `ffmpeg` if one is available on `PATH`, and finally fall back to OpenCV's `mp4v` writer. So the only new Python package we recommend for more reliable MP4 export is `imageio-ffmpeg`.
 
 If these still cannot solve your issue, please try search on RVT's [issues](https://github.com/NVlabs/RVT/issues). If the problem still persists after that, please feel free to raise an issue to this repository.
 ## Acknowledgement
@@ -313,6 +319,5 @@ We sincerely thank the authors of the following repositories for sharing their c
 - [SAM-E](https://github.com/pipixiaqishi1/SAM-E)
 - [SAM2](https://github.com/facebookresearch/sam2)
 - [The COLOSSEUM](https://robot-colosseum.github.io/)
-
 
 
