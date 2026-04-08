@@ -466,29 +466,17 @@ def apply_se3_aug_con_same(
     # sample translation perturbation with specified range
     # augmentation range is a percentage of the scene bound
     trans_range = (bounds[:, 3:] - bounds[:, :3]) * trans_aug_range.to(device=device)
-    # rand_dist samples value from -1 to 1
+    # rand_dist samples one shared value and repeats it across the sequence
     trans_shift = trans_range * aug_utils.rand_dist_same((bs, 3)).to(device=device)
 
-    # apply bounded translations
-    bounds_x_min, bounds_x_max = bounds[:, 0], bounds[:, 3]
-    bounds_y_min, bounds_y_max = bounds[:, 1], bounds[:, 4]
-    bounds_z_min, bounds_z_max = bounds[:, 2], bounds[:, 5]
-
-    trans_shift[:, 0] = torch.clamp(
-        trans_shift[:, 0],
-        min=bounds_x_min - action_gripper_trans[:, 0],
-        max=bounds_x_max - action_gripper_trans[:, 0],
-    )
-    trans_shift[:, 1] = torch.clamp(
-        trans_shift[:, 1],
-        min=bounds_y_min - action_gripper_trans[:, 1],
-        max=bounds_y_max - action_gripper_trans[:, 1],
-    )
-    trans_shift[:, 2] = torch.clamp(
-        trans_shift[:, 2],
-        min=bounds_z_min - action_gripper_trans[:, 2],
-        max=bounds_z_max - action_gripper_trans[:, 2],
-    )
+    # Keep the translation identical across the whole sequence by clamping it
+    # against the intersection of valid per-step translation ranges.
+    valid_shift_min = bounds[:, :3] - action_gripper_trans
+    valid_shift_max = bounds[:, 3:] - action_gripper_trans
+    shared_shift_min = torch.max(valid_shift_min, dim=0, keepdim=True).values
+    shared_shift_max = torch.min(valid_shift_max, dim=0, keepdim=True).values
+    shared_shift = torch.clamp(trans_shift[:1], min=shared_shift_min, max=shared_shift_max)
+    trans_shift = shared_shift.repeat(bs, 1)
 
     trans_shift_4x4 = identity_4x4.detach().clone()
     trans_shift_4x4[:, 0:3, 3] = trans_shift
