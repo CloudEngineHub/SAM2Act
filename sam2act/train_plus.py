@@ -35,7 +35,9 @@ from sam2act.utils.rvt_utils import (
     load_agent,
     load_agent_only_model,
     load_agent_only_model_exclude,
-    RLBENCH_TASKS,
+    normalize_data_source,
+    resolve_tasks,
+    resolve_train_dataset_source,
 )
 from sam2act.utils.peract_utils import (
     CAMERAS,
@@ -155,12 +157,7 @@ def save_agent(agent, path, epoch):
 
 
 def get_tasks(exp_cfg):
-    parsed_tasks = exp_cfg.tasks.split(",")
-    if parsed_tasks[0] == "all":
-        tasks = RLBENCH_TASKS
-    else:
-        tasks = parsed_tasks
-    return tasks
+    return resolve_tasks(exp_cfg.tasks, exp_cfg.data_source)
 
 
 def get_logdir(cmd_args, exp_cfg):
@@ -227,13 +224,19 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
     # to match peract, iterations per epoch
     TRAINING_ITERATIONS = int(exp_cfg.train_iter // (exp_cfg.bs * world_size))
     EPOCHS = exp_cfg.epochs
-    TRAIN_REPLAY_STORAGE_DIR = "replay_temporal/replay_train"
-    TRAIN_REPLAY_STORAGE_DIR_MEM = "replay_temporal_memory/replay_train"
+    data_source = normalize_data_source(exp_cfg.data_source)
+    train_replay_storage_dir, train_data_folder = resolve_train_dataset_source(
+        data_source
+    )
     # TEST_REPLAY_STORAGE_DIR = "replay/replay_val"
     log_dir = get_logdir(cmd_args, exp_cfg)
     tasks = get_tasks(exp_cfg)
     if rank == 0:
         print("Training on {} tasks: {}".format(len(tasks), tasks))
+        print(
+            f"Using data_source={data_source} "
+            f"dataset_root={train_data_folder} replay_root={train_replay_storage_dir}"
+        )
 
     # if exp_cfg.agent == "our":
     mvt_cfg = mvt_cfg_mod.get_cfg_defaults()
@@ -255,11 +258,9 @@ def experiment(cmd_args, devices, rank, node_rank, world_size):
         tasks,
         BATCH_SIZE_TRAIN,
         None,
-        # TRAIN_REPLAY_STORAGE_DIR,
-        TRAIN_REPLAY_STORAGE_DIR_MEM,
+        train_replay_storage_dir,
         None,
-        # DATA_FOLDER,
-        DATA_FOLDER_MEM,
+        train_data_folder,
         NUM_TRAIN,
         None,
         cmd_args.refresh_replay,

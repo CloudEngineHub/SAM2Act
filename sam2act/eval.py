@@ -57,7 +57,10 @@ from sam2act.utils.rlbench_planning import (
 from sam2act.utils.rvt_utils import (
     TensorboardManager,
     get_eval_parser,
+    DATA_SOURCE_RLBENCH18,
     RLBENCH_TASKS,
+    normalize_data_source,
+    resolve_tasks,
 )
 from sam2act.utils.rvt_utils import load_agent_only_model as load_agent_state
 
@@ -241,6 +244,9 @@ def load_agent(
             old_place_with_mean = exp_cfg.rvt.place_with_mean
             exp_cfg.rvt.place_with_mean = True
 
+        resolved_data_source = normalize_data_source(
+            getattr(exp_cfg, "data_source", DATA_SOURCE_RLBENCH18)
+        )
         exp_cfg.freeze()
 
         # create agent
@@ -333,6 +339,7 @@ def load_agent(
             raise NotImplementedError
 
         agent.build(training=False, device=device)
+        agent.data_source = resolved_data_source
         load_agent_state(model_path, agent)
         agent.eval()
 
@@ -358,6 +365,7 @@ def eval(
     agent,
     tasks,
     eval_datafolder,
+    data_source=DATA_SOURCE_RLBENCH18,
     start_episode=0,
     eval_episodes=25,
     episode_length=25,
@@ -387,10 +395,9 @@ def eval(
     ]
 
     task_classes = []
-    if tasks[0] == "all":
-        tasks = RLBENCH_TASKS
-        if verbose:
-            print(f"evaluate on {len(tasks)} tasks: ", tasks)
+    tasks = resolve_tasks(tasks, data_source)
+    if verbose:
+        print(f"evaluate on {len(tasks)} tasks: ", tasks)
 
     for task in tasks:
         if task not in task_files:
@@ -504,12 +511,13 @@ def eval(
                 if "eval" in s.name:
                     s.name = "%s/%s" % (s.name, task_name)
 
+        task_score = float(np.mean(task_rewards)) if len(task_rewards) > 0 else float("nan")
         if len(summaries) > 0:
-            task_score = [
+            summary_scores = [
                 s.value for s in summaries if f"eval_envs/return/{task_name}" in s.name
-            ][0]
-        else:
-            task_score = "unknown"
+            ]
+            if len(summary_scores) > 0:
+                task_score = float(summary_scores[0])
 
         print(f"[Evaluation] Finished {task_name} | Final Score: {task_score}\n")
 
@@ -548,7 +556,10 @@ def eval(
             fieldnames = ["task", "success rate", "length", "total_transitions"]
             csv_writer = csv.DictWriter(csv_fp, fieldnames=fieldnames)
             csv_results = {"task": "average"}
-            csv_results["success rate"] = sum(scores) / len(scores)
+            valid_scores = [float(score) for score in scores if np.isfinite(score)]
+            csv_results["success rate"] = (
+                sum(valid_scores) / len(valid_scores) if len(valid_scores) > 0 else float("nan")
+            )
             csv_writer.writerow(csv_results)
 
     eval_env.shutdown()
@@ -601,9 +612,7 @@ def _eval(args):
             .
         }
         """
-        to_skip = {
-            get_model_index(x): {y: False for y in args.tasks} for x in model_paths
-        }
+        to_skip = {get_model_index(x): {} for x in model_paths}
 
         filenames = os.listdir(args.eval_log_dir)
         for filename in filenames:
@@ -624,23 +633,12 @@ def _eval(args):
 
     # tb = TensorboardManager(args.eval_log_dir)
     for model_path in model_paths:
-        tasks_to_eval = deepcopy(args.tasks)
-
         if args.peract_official:
             model_idx = 0
         else:
             model_idx = get_model_index(model_path)
             if model_idx is None:
                 model_idx = 0
-
-        if args.skip:
-            for _task in args.tasks:
-                if to_skip[model_idx][_task]:
-                    tasks_to_eval.remove(_task)
-
-            if len(tasks_to_eval) == 0:
-                print(f"Skipping model_idx={model_idx} for args.tasks={args.tasks}")
-                continue
 
         if not (args.peract_official):
             agent = load_agent(
@@ -655,6 +653,10 @@ def _eval(args):
             agent_eval_log_dir = os.path.join(
                 args.eval_log_dir, os.path.basename(model_path).split(".")[0]
             )
+            if args.data_source is not None:
+                data_source = normalize_data_source(args.data_source)
+            else:
+                data_source = getattr(agent, "data_source", DATA_SOURCE_RLBENCH18)
         else:
             agent = load_agent(
                 peract_official=args.peract_official,
@@ -663,12 +665,28 @@ def _eval(args):
                 use_input_place_with_mean=args.use_input_place_with_mean,
             )
             agent_eval_log_dir = os.path.join(args.eval_log_dir, "final")
+            if args.data_source is not None:
+                data_source = normalize_data_source(args.data_source)
+            else:
+                data_source = DATA_SOURCE_RLBENCH18
+
+        tasks_to_eval = resolve_tasks(args.tasks, data_source)
+
+        if args.skip:
+            tasks_to_eval = [
+                _task for _task in tasks_to_eval if not to_skip[model_idx].get(_task, False)
+            ]
+
+            if len(tasks_to_eval) == 0:
+                print(f"Skipping model_idx={model_idx} for args.tasks={args.tasks}")
+                continue
 
         os.makedirs(agent_eval_log_dir, exist_ok=True)
         scores = eval(
             agent=agent,
             tasks=tasks_to_eval,
             eval_datafolder=args.eval_datafolder,
+            data_source=data_source,
             start_episode=args.start_episode,
             eval_episodes=args.eval_episodes,
             episode_length=args.episode_length,

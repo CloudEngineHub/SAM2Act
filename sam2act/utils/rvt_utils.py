@@ -188,6 +188,16 @@ def get_eval_parser():
     parser.add_argument(
         "--tasks", type=str, nargs="+", default=["insert_onto_square_peg"]
     )
+    parser.add_argument(
+        "--data-source",
+        type=str,
+        default=None,
+        choices=[DATA_SOURCE_RLBENCH18, DATA_SOURCE_MEMORYBENCH],
+        help=(
+            "Dataset/task source used for resolving '--tasks all'. "
+            "If omitted, eval falls back to the saved run config."
+        ),
+    )
     parser.add_argument("--model-folder", type=str, default=None)
     parser.add_argument("--eval-datafolder", type=str, default="./data/val/")
     parser.add_argument(
@@ -228,6 +238,9 @@ def get_eval_parser():
     return parser
 
 
+DATA_SOURCE_RLBENCH18 = "rlbench18"
+DATA_SOURCE_MEMORYBENCH = "memorybench"
+
 RLBENCH_TASKS = [
     "put_item_in_drawer",
     "reach_and_drag",
@@ -248,6 +261,51 @@ RLBENCH_TASKS = [
     "meat_off_grill",
     "stack_cups",
 ]
+
+MEMORYBENCH_TASKS = [
+    "put_block_back",
+    "rearrange_block",
+    "reopen_drawer",
+]
+
+
+def normalize_data_source(data_source):
+    if data_source is None:
+        return DATA_SOURCE_RLBENCH18
+
+    data_source = data_source.strip().lower()
+    if data_source not in (DATA_SOURCE_RLBENCH18, DATA_SOURCE_MEMORYBENCH):
+        raise ValueError(
+            f"Unsupported data_source={data_source!r}. "
+            f"Expected one of: {DATA_SOURCE_RLBENCH18}, {DATA_SOURCE_MEMORYBENCH}."
+        )
+    return data_source
+
+
+def resolve_tasks(tasks, data_source=DATA_SOURCE_RLBENCH18):
+    data_source = normalize_data_source(data_source)
+
+    if isinstance(tasks, str):
+        parsed_tasks = tasks.split(",")
+    else:
+        parsed_tasks = list(tasks)
+
+    parsed_tasks = [task.strip() for task in parsed_tasks if task.strip()]
+    if not parsed_tasks:
+        raise ValueError("No tasks were provided.")
+
+    if parsed_tasks[0] == "all":
+        if data_source == DATA_SOURCE_RLBENCH18:
+            return RLBENCH_TASKS.copy()
+
+    return parsed_tasks
+
+
+def resolve_train_dataset_source(data_source):
+    data_source = normalize_data_source(data_source)
+    if data_source == DATA_SOURCE_MEMORYBENCH:
+        return "replay_temporal_memory/replay_train", peract_utils.DATA_FOLDER_MEM
+    return "replay_temporal/replay_train", peract_utils.DATA_FOLDER
 
 
 def load_agent(agent_path, agent=None, only_epoch=False):

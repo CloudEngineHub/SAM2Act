@@ -7,6 +7,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 
 _C.agent = "our"
+_C.data_source = "rlbench18"
 _C.tasks = "insert_onto_square_peg,open_drawer,place_wine_at_rack_location,light_bulb_in"
 _C.exp_id = "def"
 _C.resume = ""
