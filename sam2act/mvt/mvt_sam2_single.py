@@ -99,6 +99,7 @@ class MVT_SAM2_Single(nn.Module):
         sam2_ckpt,
         use_memory,
         num_maskmem,
+        memory_target_source,
         renderer_device="cuda:0",
         renderer=None,
         no_feat=False,
@@ -201,6 +202,8 @@ class MVT_SAM2_Single(nn.Module):
         self.rank = rank
         self.use_memory = use_memory
         self.num_maskmem = num_maskmem
+        self.memory_target_source = memory_target_source
+        assert self.memory_target_source in ("pred", "gt"), self.memory_target_source
 
         self.curr_obs_idx = 0
 
@@ -669,7 +672,7 @@ class MVT_SAM2_Single(nn.Module):
         # assert img_feat_dim == self.img_feat_dim
         assert h == w == self.img_size
 
-        img_raw = img.clone()
+        hm_gt = kwargs.get("hm_gt")
         img = img.view(bs * num_img, img_feat_dim, h, w)
         # preprocess
         # (bs * num_img, im_channels, h, w)
@@ -685,7 +688,6 @@ class MVT_SAM2_Single(nn.Module):
         #     rgb_img[rgb_img>1] = 1 
             
         if self.resize_rgb:
-            # import pdb;pdb.set_trace()
             rgb_img = F.interpolate(rgb_img, size=(256, 256), mode='bilinear', align_corners=True)
         
         feat_sizes = [(self.sam2.image_size // 4, self.sam2.image_size // 4), 
@@ -915,7 +917,18 @@ class MVT_SAM2_Single(nn.Module):
                         trans_.append(trans)
 
                         if self.use_memory:
-                            self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), idx, num_img, feat_sizes)
+                            if self.memory_target_source == "gt":
+                                assert hm_gt is not None, "hm_gt is required when memory_target_source='gt'"
+                                memory_hm = hm_gt[idx : idx + 1].unsqueeze(2).unsqueeze(2)
+                            else:
+                                memory_hm = trans.view(bs, num_img, 1, 1, h, w)
+                            self.sam2_add_new_memory(
+                                self.sam2,
+                                memory_hm,
+                                idx,
+                                num_img,
+                                feat_sizes,
+                            )
                             self.curr_obs_idx += 1
 
                 x = torch.cat(x_, dim=0)
@@ -956,8 +969,21 @@ class MVT_SAM2_Single(nn.Module):
                     trans = self.trans_decoder(u).view(bs, self.num_img, 1, h, w)
 
                 if self.use_memory:
+                    if self.memory_target_source == "gt":
+                        memory_hm = F.softmax(
+                            trans.detach().view(bs, num_img, h * w),
+                            dim=2,
+                        ).view(bs, num_img, 1, 1, h, w)
+                    else:
+                        memory_hm = trans.view(bs, num_img, 1, 1, h, w)
                     with torch.cuda.amp.autocast(enabled=True):
-                        self.sam2_add_new_memory(self.sam2, trans.view(bs, num_img, 1, 1, h, w), 0, num_img, feat_sizes)
+                        self.sam2_add_new_memory(
+                            self.sam2,
+                            memory_hm,
+                            0,
+                            num_img,
+                            feat_sizes,
+                        )
                     self.curr_obs_idx += 1
                 
         if not self.no_feat:

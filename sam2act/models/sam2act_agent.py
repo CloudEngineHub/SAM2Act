@@ -737,9 +737,15 @@ class SAM2Act_Agent:
                     ).to(rot_x_y.device)
                     rot_x_y %= self._num_rotation_classes
 
-            # hm_gt = self.get_gt_hm(
-            #     wpt_local, dyn_cam_info, dims=(bs, nc, h, w)
-            # )
+            hm_gt = None
+            if (
+                self.use_memory
+                and self._network.training
+                and getattr(self._net_mod, "memory_target_source", "pred") == "gt"
+            ):
+                hm_gt = self.get_gt_hm(
+                    wpt_local, dyn_cam_info, dims=(bs, nc, h, w)
+                )
 
             out = self._network(
                 pc=pc,
@@ -749,7 +755,7 @@ class SAM2Act_Agent:
                 img_aug=img_aug,
                 wpt_local=wpt_local if self._network.training else None,
                 rot_x_y=rot_x_y if self.rot_ver == 1 else None,
-                # hm_gt=hm_gt,
+                hm_gt=hm_gt,
             )
 
             q_trans, rot_q, grip_q, collision_q, y_q, pts = self.get_q(
