@@ -74,17 +74,13 @@ class PutBlockBack(Task):
         _, _, z = self._block.get_position()
         self._block.set_position([x, y, z])
 
-        waypoint1 = Dummy("waypoint1")
-        _, _, z = waypoint1.get_position()
-        waypoint1.set_position([x, y, z])
+        waypoint8 = Dummy("waypoint8")
+        _, _, z = waypoint8.get_position()
+        waypoint8.set_position([x, y, z])
 
-        waypoint10 = Dummy("waypoint10")
-        _, _, z = waypoint10.get_position()
-        waypoint10.set_position([x, y, z])
-
-        waypoint11 = Dummy("waypoint11")
-        _, _, z = waypoint11.get_position()
-        waypoint11.set_position([x, y, z])
+        waypoint9 = Dummy("waypoint9")
+        _, _, z = waypoint9.get_position()
+        waypoint9.set_position([x, y, z])
         # ----------------------------------------------------------------------
 
         self.goal_conditions = [

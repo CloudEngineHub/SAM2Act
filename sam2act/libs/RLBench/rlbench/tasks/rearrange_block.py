@@ -85,21 +85,18 @@ class RearrangeBlock(Task):
         _, _, z = waypoint7.get_position()
         waypoint7.set_position([x, y, z])
 
-        waypoint8 = Dummy("waypoint8")
-        _, _, z = waypoint8.get_position()
-        waypoint8.set_position([x, y, z])
-
         # ----------------------------------------------------------------------
 
         # Place the waypoints associated with the dual patch correctly ---------
-        waypoint2 = Dummy("waypoint2")
         x, y, _ = dual_patch.get_position()
+
+        waypoint1 = Dummy("waypoint1")
+        _, _, z = waypoint1.get_position()
+        waypoint1.set_position([x, y, z])
+
+        waypoint2 = Dummy("waypoint2")
         _, _, z = waypoint2.get_position()
         waypoint2.set_position([x, y, z])
-
-        waypoint3 = Dummy("waypoint3")
-        _, _, z = waypoint3.get_position()
-        waypoint3.set_position([x, y, z])
 
         # ----------------------------------------------------------------------
 

@@ -1,4 +1,5 @@
 import math
+import random
 from typing import List, Tuple
 import numpy as np
 from pyrep.objects.proximity_sensor import ProximitySensor
@@ -10,6 +11,8 @@ from rlbench.backend.task import Task
 from rlbench.backend.conditions import Condition, DetectedCondition, JointCondition, NothingGrasped, ConditionSet
 
 DRAWER_NAMES = ['bottom', 'middle', 'top']
+
+JNT_RANGE = (0.0, 0.0)
 
 class JointConditionEx(Condition):
     def __init__(self, joint: Joint, position: float):
@@ -47,7 +50,8 @@ class ReopenDrawer(Task):
             if i == index:
                 self.drawer_joints[i].set_joint_position(0.21, disable_dynamics=True)
             else:
-                self.drawer_joints[i].set_joint_position(0.0, disable_dynamics=True)
+                init_val = JNT_RANGE[0] + (JNT_RANGE[1] - JNT_RANGE[0]) * random.random()
+                self.drawer_joints[i].set_joint_position(init_val, disable_dynamics=True)
 
         target_anchor = Dummy(f"waypoint_anchor_{DRAWER_NAMES[index]}")
         waypoint0 = Dummy("waypoint0")
