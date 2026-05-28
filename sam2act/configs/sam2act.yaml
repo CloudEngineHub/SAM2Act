@@ -1,6 +1,7 @@
 exp_id: sam2act
 exp_name: test
 wandb: True
+data_source: rlbench
 tasks: all
 agent: our
 demo: 100
