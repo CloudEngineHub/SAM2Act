@@ -34,6 +34,12 @@
     <a href="https://huggingface.co/datasets/hqfang/memorybench">
       <img src="https://img.shields.io/badge/MemoryBench-grey?logo=huggingface&logoColor=white&labelColor=yellow">
     </a>
+    <a href="https://huggingface.co/datasets/hqfang/sam2act-data">
+      <img src="https://img.shields.io/badge/Data-grey?logo=huggingface&logoColor=white&labelColor=yellow">
+    </a>
+    <a href="https://huggingface.co/hqfang/sam2act-models">
+      <img src="https://img.shields.io/badge/Models-grey?logo=huggingface&logoColor=white&labelColor=yellow">
+    </a>
     <a href="https://x.com/DJiafei/status/1884954101697699940">
       <img src="https://img.shields.io/badge/Post-grey?logo=x&logoColor=white&labelColor=black">
     </a>
@@ -150,11 +156,11 @@ pip install --upgrade hydra-core
 
     - For experiments on RLBench, we use [pre-generated dataset](https://drive.google.com/drive/folders/0B2LlLwoO3nfZfkFqMEhXWkxBdjJNNndGYl9uUDQwS1pfNkNHSzFDNGwzd1NnTmlpZXR1bVE?resourcekey=0-jRw5RaXEYRLe2W6aNrNFEQ) provided by [PerAct](https://github.com/peract/peract#download). If downloading from Google Drive encounters any limits, we also provide a mirror of the same dataset in [Hugging Face](https://huggingface.co/datasets/hqfang/rlbench-18-tasks). Please download and place them under `sam2act/sam2act/data/xxx` where `xxx` is either `train`, `test`, or `val`.  
 
-    - Additionally, building upon PerAct's dataloader, we create a new dataloader that can sample observation sequences of a given size, and it also supports the same functionality as PerAct's. Same as PerAct, our dataloader is also based on [YARR](https://github.com/stepjam/YARR). YARR creates a replay buffer on the fly which can increase the startup time. We provide an option to directly load the replay buffer from the disk. We recommend using the pre-generated replay buffer (98 GB) as it reduces the startup time. You can download replay buffer for [indidual tasks](https://huggingface.co/datasets/hqfang/sam2act/tree/main/replay_temporal/replay_train). After downloading, uncompress the replay buffer(s) (for example using the command `tar -xf <task_name>.tar.xz`) and place it under `sam2act/sam2act/replay_temporal/replay_xxx` where `xxx` is `train` (for now we only provide replay buffer for trianing split). Note that is useful only if you want to train SAM2Act from scratch and not needed if you want to evaluate the pre-trained model.
+    - Additionally, building upon PerAct's dataloader, we create a new dataloader that can sample observation sequences of a given size, and it also supports the same functionality as PerAct's. Same as PerAct, our dataloader is also based on [YARR](https://github.com/stepjam/YARR). YARR creates a replay buffer on the fly which can increase the startup time, so we provide pre-generated replay buffers in [hqfang/sam2act-data](https://huggingface.co/datasets/hqfang/sam2act-data). RLBench replay buffers are under `replay_temporal/replay_train`, and MemoryBench replay buffers are under `replay_temporal_memory/replay_train`. After downloading the `.tar.xz` file(s), uncompress the replay buffer(s) using `tar -xf <task_name>.tar.xz` and place them under the matching local folder: `sam2act/sam2act/replay_temporal/replay_train` for RLBench or `sam2act/sam2act/replay_temporal_memory/replay_train` for MemoryBench. These buffers are useful only if you want to train from scratch and are not needed for evaluating pretrained models.
 
     - If you prefer using dataloader same as PerAct's, you can refer to the step 6 of this [instruction](https://github.com/NVlabs/RVT?tab=readme-ov-file#getting-started). You also need to change `get_dataset_temporal` to `get_dataset` in `train.py`. Again, note that this is not necessary because our dataloader preserves all functionality of PerAct's.
 
-    - For experiments on MemoryBench, we also provide a [pre-generated dataset](https://huggingface.co/datasets/hqfang/memorybench). Please download and place them under `sam2act/sam2act/data_memory/xxx` where `xxx` is either `train` or `test`.  
+    - For experiments on MemoryBench, we also provide a [pre-generated dataset](https://huggingface.co/datasets/hqfang/memorybench). Please download and place the train and test zip files under `sam2act/sam2act/data_memory/xxx` where `xxx` is either `train` or `test`. The current MemoryBench data is rendered with OpenGL to match the evaluation environment.
 
 
 ## Training 
@@ -165,22 +171,23 @@ To train SAM2Act on all RLBench tasks, use the following command (from folder `s
 WANDB_MODE="offline" \
 torchrun --nproc_per_node="8" --nnodes="1" \
   train.py \
+  --exp_cfg_opts "data_source rlbench18 tasks all" \
   --exp_cfg_path configs/sam2act.yaml \
   --mvt_cfg_path mvt/configs/sam2act.yaml
 ```
 In this example, we use 8 H100 GPUs on 1 node. Change the `nproc_per_node` and `nnodes` flags depending on available compute. Note that `bs` in config denotes batch size per GPU, and `lr` will be adjusted by total batch size by default following previous works. Be careful when using different number of GPUs.
 
 ### Training SAM2Act on MemoryBench
-By default, the training code is using RLBench data. To train SAM2Act on MemoryBench, change the argument for function `get_dataset_temporal` in `train.py`. Following the instruction in code, comment the directory variables for RLBench, and uncomment the ones for MemoryBench. Then, similarly, use the following command (from folder `sam2act/sam2act`):
+The training code selects RLBench or MemoryBench through `data_source`, so no code edits are needed. To train SAM2Act on one MemoryBench task, use the following command (from folder `sam2act/sam2act`):
 ```
 WANDB_MODE="offline" \
 torchrun --nproc_per_node="8" --nnodes="1" \
   train.py \
-  --exp_cfg_opts "tasks <name_of_memorybench_task>" \
+  --exp_cfg_opts "data_source memorybench tasks <memorybench_task_name>" \
   --exp_cfg_path configs/sam2act.yaml \
   --mvt_cfg_path mvt/configs/sam2act.yaml
 ```
-This overrides the name of the task in `configs/sam2act.yaml`, allowing the code run with the expected task in MemoryBench. For more instruction on how to override config, see more below. You can also directly change the variables in `configs/sam2act.yaml`.
+This overrides the data source and task name in `configs/sam2act.yaml`, allowing the code to run with the expected MemoryBench task. The MemoryBench tasks are `put_block_back`, `rearrange_block`, and `reopen_drawer`. `tasks all` is only expanded for RLBench, so pass the MemoryBench task explicitly. For more instruction on how to override config, see more below. You can also directly change the variables in `configs/sam2act.yaml`.
 
 ### Training SAM2Act+ on MemoryBench
 Make sure that Stage 1 training is done by following previous instruction. Then, to train SAM2Act+ on MemoryBench, use the following command (from folder `sam2act/sam2act`):
@@ -188,11 +195,13 @@ Make sure that Stage 1 training is done by following previous instruction. Then,
 WANDB_MODE="offline" \
 torchrun --nproc_per_node="8" --nnodes="1" \
   train_plus.py \
-  --exp_cfg_opts "tasks <memorybench_task_name>" \
+  --exp_cfg_opts "data_source memorybench tasks <memorybench_task_name>" \
   --exp_cfg_path configs/sam2act_plus.yaml \
   --mvt_cfg_path mvt/configs/sam2act_plus.yaml
 ```
-By default, we use task `put_block_back` in `configs/sam2act_plus.yaml`. You can override this with any task in MemoryBench. Make sure that the `configs/sam2act_plus.yaml` has the same `task_id` with `configs/sam2act.yaml`, because the second stage training requires finding previous pre-trained weight in the same folder. Note that the only two differences between `mvt/configs/sam2act.yaml` and `mvt/configs/sam2act_plus.yaml` are that in `mvt/configs/sam2act_plus.yaml`, `use_memory` is set to be `True` and `num_maskmem` is valid during training. Make sure that `bs` in `configs/sam2act_plus.yaml` equals to `num_maskmem + 1`.
+By default, we use task `put_block_back` in `configs/sam2act_plus.yaml`. You can override this with any task in MemoryBench. Make sure that `exp_id` and `exp_name` match the Stage 1 run, or set `resume` to the Stage 1 checkpoint, because the second stage training requires finding previous pre-trained weights in the same run folder. The key differences between `mvt/configs/sam2act.yaml` and `mvt/configs/sam2act_plus.yaml` are that `use_memory` is set to `True` and `memory_target_source` is set to `gt` in `mvt/configs/sam2act_plus.yaml`. Make sure that `bs` in `configs/sam2act_plus.yaml` equals to `num_maskmem + 1`.
+
+Recent MemoryBench and SAM2Act+ updates: we made several training code updates, and the memory-conditioned model is now trained with ground-truth translation heatmaps for memory conditioning. We also apply the same pointcloud augmentation across each sequence. MemoryBench has been updated so that the data is rendered in OpenGL to match the evaluation environment, and we made minimal waypoint updates for each MemoryBench task to reduce information leak during execution. As a result, the tasks now need memory capability: without it, performance should be very close to random, roughly 25% for `put_block_back`, 50% for `rearrange_block`, and 33% for `reopen_drawer`.
 
 ### More details about `train.py` and `train_plus.py`
 - wandb in offline mode is used by default, if you want to attach your wandb api key, please change the first line of training command and use the following command:
@@ -240,11 +249,12 @@ torchrun --nproc_per_node="8" --nnodes="1" \
 
 ## Evaluation
 ### Evaluate SAM2Act on RLBench
-Download the [pretrained SAM2Act model](https://huggingface.co/datasets/hqfang/sam2act/tree/main/sam2act_rlbench). Place the model (`model_89.pth` trained for 90 epochs or 56.25K steps with batch size 256 using 32 A100 GPUs) and the config files under the folder `sam2act/sam2act/runs/sam2act_rlbench/`. The model checkpoint excludes optimizer state to save disk space. Run evaluation using (from folder `sam2act/sam2act`):
+Download the [pretrained SAM2Act RLBench model](https://huggingface.co/hqfang/sam2act-models/tree/main/sam2act_rlbench). Place the model (`model_89.pth` trained for 90 epochs or 56.25K steps with batch size 256 using 32 A100 GPUs) and the config files under the folder `sam2act/sam2act/runs/sam2act_rlbench/`. The model checkpoint excludes optimizer state to save disk space. Run evaluation using (from folder `sam2act/sam2act`):
 ```
 python eval.py \
   --model-folder runs/sam2act_rlbench \
   --eval-datafolder ./data/test \
+  --data-source rlbench18 \
   --tasks all \
   --eval-episodes 25 \
   --log-name test/1 \
@@ -256,11 +266,12 @@ python eval.py \
 Note that the training process involves significant randomness, primarily due to how data is sampled in each batch (retraining may get different results as well). Additionally, randomness is introduced during evaluation by the sampling-based motion planner used in RLBench. As a result, the evaluation results of the pretrained SAM2Act may not be perfectly aligned with those reported in the paper, but they remain nearly identical. We evaluated the newly trained model four times, obtaining an average success rate of 86.8 ± 1.1.
 
 ### Evaluate SAM2Act+ on MemoryBench
-Download the [pretrained SAM2Act+ model (coming soon)]() for each task. Place the model (`model_plus_19.pth` trained for 20 epochs or 12.5K steps with batch size 320) and the config files under the folder `sam2act/sam2act/runs/sam2act_plus_<task_name>/`. Run evaluation using (from folder `sam2act/sam2act`):
+Download the [pretrained SAM2Act+ MemoryBench models](https://huggingface.co/hqfang/sam2act-models/tree/main/sam2act_memorybench). Place the `sam2act_memorybench` folder under `sam2act/sam2act/runs/`. Each task folder contains the stage-1 checkpoint (`model_9.pth`), stage-2 checkpoint (`model_plus_19.pth`), and the corresponding config files. Run evaluation using (from folder `sam2act/sam2act`):
 ```
 python eval.py \
-  --model-folder runs/sam2act_plus_<task_name> \
+  --model-folder runs/sam2act_memorybench/sam2act_<memorybench_task_name> \
   --eval-datafolder ./data_memory/test \
+  --data-source memorybench \
   --tasks <memorybench_task_name> \
   --eval-episodes 25 \
   --log-name test/1 \
@@ -319,5 +330,3 @@ We sincerely thank the authors of the following repositories for sharing their c
 - [SAM-E](https://github.com/pipixiaqishi1/SAM-E)
 - [SAM2](https://github.com/facebookresearch/sam2)
 - [The COLOSSEUM](https://robot-colosseum.github.io/)
-
-
