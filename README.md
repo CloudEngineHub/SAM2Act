@@ -31,6 +31,12 @@
     <a href="https://arxiv.org/abs/2501.18564">
       <img src="https://img.shields.io/badge/arXiv-grey?logo=arxiv&logoColor=white&labelColor=red">
     </a>
+    <a href="https://huggingface.co/hqfang/sam2act-models">
+      <img src="https://img.shields.io/badge/Models-grey?logo=huggingface&logoColor=white&labelColor=yellow">
+    </a>
+    <a href="https://huggingface.co/datasets/hqfang/sam2act-datasets">
+      <img src="https://img.shields.io/badge/Datasets-grey?logo=huggingface&logoColor=white&labelColor=yellow">
+    </a>
     <a href="https://huggingface.co/datasets/hqfang/memorybench">
       <img src="https://img.shields.io/badge/MemoryBench-grey?logo=huggingface&logoColor=white&labelColor=yellow">
     </a>
